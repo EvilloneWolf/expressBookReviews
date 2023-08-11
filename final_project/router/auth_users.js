@@ -1,31 +1,27 @@
 const express = require('express');
 const jwt = require('jsonwebtoken');
-const books = require("./booksdb.js"); // Assuming you have a books database
-const regdUsers = express.Router();
+const books = require("./booksdb.js");
 
-let users = {"user":"helloworld","password": "12345678"};
+const regd_users = express.Router();
+const users = [];
 
 const isValid = (username) => {
-  // Write code to check if the username is valid
-  return users.some(user => user.username === username);
+  return !users.some(user => user.username === username);
 };
 
 const authenticatedUser = (username, password) => {
-  // Write code to check if username and password match the one we have in records
   return users.some(user => user.username === username && user.password === password);
 };
 
-// Only registered users can login
-regdUsers.post("/login", (req, res) => {
+regd_users.post("/login", (req, res) => {
   const username = req.body.username;
   const password = req.body.password;
 
   if (!username || !password) {
-    return res.status(404).json({ message: "Error logging in" });
+    return res.status(400).json({ message: "Error logging in" });
   }
 
   if (authenticatedUser(username, password)) {
-    // Generate JWT token for the authenticated user
     const token = jwt.sign({ username }, 'your-secret-key', { expiresIn: '1h' });
     return res.status(200).json({ message: "User successfully logged in", token });
   } else {
@@ -33,8 +29,24 @@ regdUsers.post("/login", (req, res) => {
   }
 });
 
-// Add a book review
-regdUsers.put("/books/review/:isbn", (req, res) => {
+regd_users.post("/register", (req, res) => {
+  const { username, password } = req.body;
+
+  if (!username || !password) {
+    return res.status(400).json({ message: "Username and password are required" });
+  }
+
+  if (isValid(username)) {
+    // Add the new user to the users array
+    users.push({ username, password }); // Push the new user object
+
+    return res.status(200).json({ message: "User registered successfully" });
+  } else {
+    return res.status(409).json({ message: "Username already exists" });
+  }
+});
+
+regd_users.put("/auth/review/:isbn", (req, res) => {
   const isbn = parseInt(req.params.isbn);
   const token = req.headers.authorization;
 
@@ -46,20 +58,18 @@ regdUsers.put("/books/review/:isbn", (req, res) => {
     const decodedToken = jwt.verify(token, 'your-secret-key');
     const username = decodedToken.username;
 
-    // Find the book based on the provided ISBN
     const book = books[isbn];
 
     if (!book) {
       return res.status(404).json({ message: "Book not found" });
     }
 
-    // Assuming the review is sent in the request body
     const review = req.body.review;
 
-    // Add the review to the book's reviews
     if (!book.reviews) {
       book.reviews = {};
     }
+
     book.reviews[username] = review;
 
     return res.status(200).json({ message: "Review added successfully" });
@@ -68,4 +78,8 @@ regdUsers.put("/books/review/:isbn", (req, res) => {
   }
 });
 
-module.exports = { authenticated: regdUsers, isValid, users };
+module.exports = {
+  authenticated: regd_users,
+  isValid: isValid,
+  users: users
+};
